@@ -1,6 +1,10 @@
-import Std
-import Batteries.Data.Vector.Lemmas
-import HexMatrix.RowEchelon
+module
+
+public import Std
+public import Batteries.Data.Vector.Lemmas
+public import HexMatrix.RowEchelon
+
+public section
 
 /-!
 Executable RREF, row-span, and nullspace routines for `hex-matrix`.
@@ -21,11 +25,12 @@ namespace Matrix
 variable {R : Type u} {n m : Nat}
 
 /-- A linear combination of the rows of `M`, using coefficients `c`. -/
+@[expose]
 def rowCombination [Mul R] [Add R] [OfNat R 0] (M : Matrix R n m) (c : Vector R n) :
     Vector R m :=
   Matrix.transpose M * c
 
-private structure RrefState (R : Type u) (n m : Nat) where
+structure RrefState (R : Type u) (n m : Nat) where
   row : Nat
   echelon : Matrix R n m
   transform : Matrix R n n
@@ -706,7 +711,7 @@ private theorem eliminateColumn_preserve_canonical_column
           simpa only [hx, hcoeff, if_false, next] using ih next hSrcNext hcanon.1 hcanon.2
 
 /-- Process columns left-to-right, performing Gauss-Jordan elimination. -/
-private def rrefLoop (col fuel : Nat) (state : RrefState R n m) : RrefState R n m :=
+def rrefLoop (col fuel : Nat) (state : RrefState R n m) : RrefState R n m :=
   match fuel with
   | 0 => state
   | fuel + 1 =>
@@ -1598,6 +1603,7 @@ private theorem rrefLoop_transform_preserve (M : Matrix R n m) :
         exact h
 
 /-- Reduced row echelon form data computed by Gauss-Jordan elimination. -/
+@[expose]
 def rref (M : Matrix R n m) : RowEchelonData R n m :=
   let final := rrefLoop 0 m
     { row := 0
@@ -1817,7 +1823,8 @@ variable [Mul R] [Add R] [OfNat R 0] [OfNat R 1]
 variable {M : Matrix R n m} {D : RowEchelonData R n m}
 
 /-- The echelon-side coefficients selected by pivot coordinates. -/
-private def echelonCoeffs [Lean.Grind.Field R] (E : IsEchelonForm M D)
+@[expose]
+def echelonCoeffs [Lean.Grind.Field R] (E : IsEchelonForm M D)
     (v : Vector R m) : Vector R n :=
   Vector.ofFn fun i =>
     if h : i.val < D.rank then
@@ -1828,6 +1835,7 @@ private def echelonCoeffs [Lean.Grind.Field R] (E : IsEchelonForm M D)
       0
 
 /-- Coefficients for expressing `v` in the row span, if the echelon rows solve it. -/
+@[expose]
 def spanCoeffs [Lean.Grind.Field R] [DecidableEq R] (E : IsEchelonForm M D)
     (v : Vector R m) : Option (Vector R n) :=
   let coeffs := Matrix.transpose D.transform * E.echelonCoeffs v
@@ -1837,6 +1845,7 @@ def spanCoeffs [Lean.Grind.Field R] [DecidableEq R] (E : IsEchelonForm M D)
     none
 
 /-- Decidable row-span membership test derived from `spanCoeffs`. -/
+@[expose]
 def spanContains [Lean.Grind.Field R] [DecidableEq R] (E : IsEchelonForm M D)
     (v : Vector R m) : Bool :=
   (E.spanCoeffs v).isSome
@@ -2188,7 +2197,7 @@ private def pivotIndexAux (D : RowEchelonData R n m) (j : Fin m) (start fuel : N
         none
 
 /-- Find the pivot-row index for column `j`, if `j` is a pivot column. -/
-private def pivotIndex? (D : RowEchelonData R n m) (j : Fin m) : Option (Fin D.rank) :=
+def pivotIndex? (D : RowEchelonData R n m) (j : Fin m) : Option (Fin D.rank) :=
   pivotIndexAux D j 0 D.rank
 
 private theorem pivotIndexAux_pivot (E : IsEchelonForm M D) (i : Fin D.rank) :
@@ -2255,6 +2264,7 @@ private theorem pivotIndex?_free_none (E : IsEchelonForm M D) (k : Fin (m - D.ra
   exact E.pivotCols_disjoint_freeCols i k
 
 /-- Nullspace basis vectors assembled as columns indexed by the free variables. -/
+@[expose]
 def nullspaceMatrix [Lean.Grind.Ring R] (E : IsRREF M D) :
     Matrix R m (m - D.rank) :=
   let freeCols := E.toIsEchelonForm.freeCols
@@ -2295,6 +2305,7 @@ the matching pivot row and free column. -/
     pivotIndex?_pivot E.toIsEchelonForm i]
 
 /-- The individual nullspace basis vectors. -/
+@[expose]
 def nullspace [Lean.Grind.Ring R] (E : IsRREF M D) :
     Vector (Vector R m) (m - D.rank) :=
   Vector.ofFn fun k => Matrix.col (E.nullspaceMatrix) k
@@ -2973,6 +2984,7 @@ theorem nullspace_complete {R : Type u} [Lean.Grind.Field R] {n m : Nat}
 end IsRREF
 
 /-- Convenience wrapper: compute row-span coefficients using `rref` internally. -/
+@[expose]
 def spanCoeffs [Lean.Grind.Field R] [DecidableEq R] (M : Matrix R n m) (v : Vector R m) :
     Option (Vector R n) :=
   let E := (rref_isRREF M).toIsEchelonForm
@@ -2987,6 +2999,7 @@ theorem spanCoeffs_sound [Lean.Grind.Field R] [DecidableEq R]
   exact (rref_isRREF M).toIsEchelonForm.spanCoeffs_sound v c h
 
 /-- Convenience wrapper: decide row-span membership using `rref` internally. -/
+@[expose]
 def spanContains [Lean.Grind.Field R] [DecidableEq R] (M : Matrix R n m) (v : Vector R m) :
     Bool :=
   let E := (rref_isRREF M).toIsEchelonForm
@@ -3008,16 +3021,19 @@ theorem spanContains_iff [Lean.Grind.Field R] [DecidableEq R]
   simpa using (rref_isRREF M).spanContains_iff v
 
 /-- The rank returned by `rref`. -/
+@[expose]
 def rref_rank [Lean.Grind.Field R] [DecidableEq R] (M : Matrix R n m) : Nat :=
   (rref M).rank
 
 /-- The public nullspace basis assembled as a matrix of basis columns. -/
+@[expose]
 def nullspaceBasisMatrix [Lean.Grind.Field R] [DecidableEq R] (M : Matrix R n m) :
     Matrix R m (m - rref_rank M) :=
   let E := rref_isRREF M
   E.nullspaceMatrix
 
 /-- Convenience wrapper: compute the nullspace basis using `rref` internally. -/
+@[expose]
 def nullspace [Lean.Grind.Field R] [DecidableEq R] (M : Matrix R n m) :
     Vector (Vector R m) (m - rref_rank M) :=
   let E := rref_isRREF M
