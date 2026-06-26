@@ -42,6 +42,7 @@ structure BareissData (n : Nat) where
 namespace BareissData
 
 /-- The determinant sign contributed by the recorded row swaps. -/
+@[expose]
 def sign (data : BareissData n) : Int :=
   if data.rowSwaps % 2 = 0 then 1 else -1
 
@@ -53,6 +54,7 @@ private def lastDiag? (M : Matrix Int n n) : Option Int :=
       some M[i][i]
 
 /-- The determinant encoded by a Bareiss elimination result. -/
+@[expose]
 def det (data : BareissData n) : Int :=
   match data.singularStep with
   | some _ => 0
@@ -121,6 +123,7 @@ binding compiles the call directly to `lean_int_div_exact`, matching
 `Int.divExact`. The Lean-level reduction is the same `num / denom` that
 `Int.divExact` uses as its logical model. -/
 @[extern "lean_int_div_exact"]
+@[expose]
 def exactDiv (num denom : @& Int) : Int := num / denom
 
 /-- When divisibility is known, `exactDiv` is the GMP-backed exact quotient. -/
@@ -131,6 +134,7 @@ theorem exactDiv_eq_divExact {num denom : Int} (h : denom ∣ num) :
   simp [exactDiv, Int.divExact_eq_ediv]
 
 /-- Search column `col` for a nonzero pivot at or below `start`. -/
+@[expose]
 def findPivotAux (M : Matrix Int n n) (col : Fin n) (start fuel : Nat) :
     Option (Fin n) :=
   match fuel with
@@ -146,6 +150,7 @@ def findPivotAux (M : Matrix Int n n) (col : Fin n) (start fuel : Nat) :
         none
 
 /-- Search column `col` for a nonzero pivot at or below `start`. -/
+@[expose]
 def findPivot? (M : Matrix Int n n) (col : Fin n) (start : Nat) :
     Option (Fin n) :=
   findPivotAux M col start (n - start)
@@ -303,6 +308,7 @@ theorem findPivot?_some_ne_zero (M : Matrix Int n n) (col : Fin n)
 
 /-- Apply one Bareiss update step to the trailing submatrix strictly below and
 to the right of the current pivot. -/
+@[expose]
 def stepMatrix (M : Matrix Int n n) (k : Nat) (pivot prevPivot : Int) :
     Matrix Int n n :=
   Matrix.ofFn fun i j =>
@@ -469,6 +475,7 @@ without re-deriving the conversion lemmas. -/
 
 /-- Pack a `Matrix Int n n` as an `Array (Array Int)` of size `n × n`. The
 representation used by the executable Bareiss array pass. -/
+@[expose]
 def matrixToRows (M : Matrix Int n n) : Array (Array Int) :=
   (Array.range n).map fun row =>
     (Array.range n).map fun col =>
@@ -484,6 +491,7 @@ def matrixToRows (M : Matrix Int n n) : Array (Array Int) :=
 
 /-- Unpack an `Array (Array Int)` row-storage representation back into a
 `Matrix Int n n`. Inverse-on-the-left of `matrixToRows`. -/
+@[expose]
 def rowsToMatrix (rows : Array (Array Int)) (n : Nat) : Matrix Int n n :=
   Matrix.ofFn fun i j => getEntry rows i.val j.val
 
@@ -791,6 +799,7 @@ private theorem findPivotArray?_matches (rows : Array (Array Int))
 applying the Bareiss trailing update for entries strictly below and to the
 right of the pivot, clearing the pivot column below the pivot, and leaving
 all other entries unchanged. -/
+@[expose]
 def stepArray (rows : Array (Array Int)) (n k : Nat) (pivot prevPivot : Int) :
     Array (Array Int) :=
   (Array.range n).map fun i =>
@@ -925,6 +934,7 @@ private def pivotArrayLoop (n fuel : Nat) (state : BareissArrayState) :
 
 /-- Bareiss elimination with row pivoting. If a column has no nonzero pivot,
 the elimination aborts and the determinant is zero. -/
+@[expose]
 def pivotLoop (fuel : Nat) (state : BareissState n) : BareissState n :=
   match fuel with
   | 0 => state
@@ -1072,6 +1082,7 @@ private def bareissArrayDet (state : BareissArrayState) (n : Nat) : Int :=
       | none => arraySign state.rowSwaps
 
 /-- Package a Bareiss state as public elimination data. -/
+@[expose]
 def finish (state : BareissState n) : BareissData n :=
   { matrix := state.matrix
     rowSwaps := state.rowSwaps
@@ -1388,6 +1399,7 @@ theorem pivotLoop_eq_noPivotLoop_of_no_singular {n : Nat}
         rw [noPivotLoop_done f state hDone]
 
 /-- Initial state used by the no-pivot Bareiss recurrence. -/
+@[expose]
 def noPivotInitialState (M : Matrix Int n n) : BareissState n :=
   { step := 0
     matrix := M
@@ -1396,15 +1408,18 @@ def noPivotInitialState (M : Matrix Int n n) : BareissState n :=
     singularStep := none }
 
 /-- Run the no-pivot Bareiss recurrence and return the final elimination data. -/
+@[expose]
 def bareissNoPivotData (M : Matrix Int n n) : BareissData n :=
   finish <| noPivotLoop n (noPivotInitialState M)
 
 /-- Determinant computed by the no-pivot Bareiss recurrence. -/
+@[expose]
 def bareissNoPivot (M : Matrix Int n n) : Int :=
   (bareissNoPivotData M).det
 
 /-- Run the row-pivoted Bareiss elimination and return the final elimination
 data together with the swap/sign bookkeeping. -/
+@[expose]
 def bareissData (M : Matrix Int n n) : BareissData n :=
   let state := bareissArrayState M
   { matrix := rowsToMatrix state.matrix n
@@ -1422,6 +1437,7 @@ theorem bareissData_eq_finish_pivotLoop (M : Matrix Int n n) :
     rowsToMatrix_matrixToRows]
 
 /-- Determinant computed by the row-pivoted Bareiss algorithm. -/
+@[expose]
 def bareiss (M : Matrix Int n n) : Int :=
   let state := bareissArrayState M
   bareissArrayDet state n
