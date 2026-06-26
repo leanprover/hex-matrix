@@ -470,7 +470,7 @@ structure BareissArrayState where
 Exposed so downstream Mathlib-free clients (notably the shared scaled
 Gram-Schmidt loop in `HexGramSchmidt.Int`) can speak about array storage
 without re-deriving the conversion lemmas. -/
-@[inline] def getEntry (rows : Array (Array Int)) (row col : Nat) : Int :=
+@[expose, inline] def getEntry (rows : Array (Array Int)) (row col : Nat) : Int :=
   rows[row]![col]!
 
 /-- Pack a `Matrix Int n n` as an `Array (Array Int)` of size `n × n`. The

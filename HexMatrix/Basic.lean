@@ -1018,7 +1018,7 @@ Calling `xs.set i (f xs[i])` forces a `lean_inc` on the borrowed entry and
 loses uniqueness on nested-array shapes (e.g. matrix rows); `modify` avoids
 that copy when `xs` is uniquely owned.
 -/
-@[inline] def modify (xs : Vector α n) (i : Nat) (f : α → α) : Vector α n :=
+@[expose, inline] def modify (xs : Vector α n) (i : Nat) (f : α → α) : Vector α n :=
   ⟨xs.toArray.modify i f, by simp⟩
 
 end Vector
