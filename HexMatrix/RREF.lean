@@ -25,6 +25,7 @@ namespace Matrix
 variable {R : Type u} {n m : Nat}
 
 /-- A linear combination of the rows of `M`, using coefficients `c`. -/
+@[expose]
 def rowCombination [Mul R] [Add R] [OfNat R 0] (M : Matrix R n m) (c : Vector R n) :
     Vector R m :=
   Matrix.transpose M * c
