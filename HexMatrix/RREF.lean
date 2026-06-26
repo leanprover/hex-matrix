@@ -711,7 +711,6 @@ private theorem eliminateColumn_preserve_canonical_column
           simpa only [hx, hcoeff, if_false, next] using ih next hSrcNext hcanon.1 hcanon.2
 
 /-- Process columns left-to-right, performing Gauss-Jordan elimination. -/
-@[expose]
 def rrefLoop (col fuel : Nat) (state : RrefState R n m) : RrefState R n m :=
   match fuel with
   | 0 => state
@@ -2198,7 +2197,6 @@ private def pivotIndexAux (D : RowEchelonData R n m) (j : Fin m) (start fuel : N
         none
 
 /-- Find the pivot-row index for column `j`, if `j` is a pivot column. -/
-@[expose]
 def pivotIndex? (D : RowEchelonData R n m) (j : Fin m) : Option (Fin D.rank) :=
   pivotIndexAux D j 0 D.rank
 

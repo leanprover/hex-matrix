@@ -3138,7 +3138,6 @@ private theorem inversePermutationValues_involutive {n : Nat}
       hi.symm
   exact hleft.trans h
 
-@[expose]
 def inversePermutationVector {n : Nat}
     (perm : Vector (Fin n) n) : Vector (Fin n) n :=
   if hnodup : perm.toList.Nodup then
@@ -6746,7 +6745,6 @@ that constrains the next entry to be strictly less than `bound`.
 /-- All strictly increasing length-`n` column tuples in `Fin m` whose entries
 are all `< bound`. The recursion appends a new largest element `c < bound` and
 recurses on the remaining prefix with the smaller bound `c.val`. -/
-@[expose]
 def selectedColumnTuplesUpTo (m : Nat) :
     (n : Nat) → (bound : Nat) → List (Vector (Fin m) n)
   | 0, _ => [emptyVec]
