@@ -1061,6 +1061,7 @@ def bareissArrayState (M : Matrix Int n n) : BareissArrayState :=
 
 /-- `arraySign` is the determinant sign contributed by `rowSwaps` recorded row
 swaps, `1` for an even count and `-1` for an odd count. -/
+@[expose]
 def arraySign (rowSwaps : Nat) : Int :=
   if rowSwaps % 2 = 0 then 1 else -1
 

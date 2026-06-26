@@ -138,6 +138,7 @@ def transpose (M : Matrix R n m) : Matrix R m n :=
   rw [transpose_getElem, transpose_getElem]
 
 /-- The all-zero matrix. -/
+@[expose]
 protected def zero [OfNat R 0] : Matrix R n m :=
   ofFn fun _ _ => 0
 
