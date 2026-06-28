@@ -1,3 +1,9 @@
+/-
+Copyright (c) 2026 Lean FRO, LLC. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Kim Morrison
+-/
+
 module
 
 public import Init.Grind.Ring.Field
@@ -5,6 +11,21 @@ public import Batteries.Data.List.Lemmas
 public import HexMatrix.Vector.Insert
 
 public section
+
+/-!
+Permutation enumeration and inversion-parity arithmetic for the local
+Leibniz determinant.
+
+This module defines `permutationVectors`, the recursive enumeration of the
+permutations of `Fin n` as length-`n` vectors, together with `inversionCount`,
+which counts the inversions of a permutation written as a list. The bulk of the
+file establishes how inversion count behaves under list concatenation and under
+swaps: `inversionCount_append` splits a concatenation into the inversions of
+each part plus the cross-inversions (`crossInversionCount`), and
+`inversionCount_adjacent_swap_parity` / `inversionCount_swap_separated_parity`
+show that swapping two distinct entries flips inversion parity. These parity
+facts underpin the sign computations used by the determinant.
+-/
 
 namespace Hex
 universe u

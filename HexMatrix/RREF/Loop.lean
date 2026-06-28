@@ -1,9 +1,30 @@
+/-
+Copyright (c) 2026 Lean FRO, LLC. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Kim Morrison
+-/
+
 module
 
 public import HexMatrix.RREF.Pivot
 import all HexMatrix.RREF.Pivot
 
 public section
+
+/-!
+Correctness of the Gauss-Jordan `rrefLoop` for `hex-matrix`.
+
+This module runs `rrefLoop` to a finished `rref` and proves it meets the
+`IsRREF` contract. It tracks the loop's proof-only invariants through each
+pivot step: the shape invariant (`rrefLoop_shape`), the canonical-column
+invariant (`rrefLoop_canonical`), the no-pivot-zero invariant
+(`rrefLoop_no_pivot_zero`), the same-operation transform equation
+(`rrefLoop_transform_preserve`), and existence of left/right inverses for the
+transform, then specializes each to the full run. The headline `def rref`
+packages the result, with `rref_isRREF` assembling the
+`IsEchelonForm`/`IsRREF` fields and `rref_transform_mul`, `rref_rank_le_n`,
+`rref_pivotCols_sorted` exposing the wrapper-level projections.
+-/
 
 namespace Hex
 universe u

@@ -1,8 +1,27 @@
+/-
+Copyright (c) 2026 Lean FRO, LLC. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Kim Morrison
+-/
+
 module
 
 public import HexMatrix.Determinant.Leibniz
 
 public section
+
+/-!
+Minors, deleted row/column submatrices, and signed cofactors.
+
+This module defines `skipIndex`, the embedding of `Fin n` into `Fin (n + 1)`
+that skips a deleted index, and uses it to build `deleteRowCol`, the
+`(n + 1) × (n + 1)` minor obtained by removing one row and one column. It then
+introduces the alternating `cofactorSign` and the signed `cofactor`, with the
+`simp`/`grind` characterizations of their values by parity. Key normalizations
+include `deleteRowCol_last_last` and `cofactor_last_last` (bottom-right minor is
+the leading prefix) and `deleteRowCol_transpose`, the transpose-compatibility
+used by row/column cofactor expansion.
+-/
 
 namespace Hex
 universe u
