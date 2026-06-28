@@ -155,6 +155,19 @@ private theorem foldl_sum_mul_left {R : Type u} [Lean.Grind.Ring R]
       have hdist : c * (acc + f x) = c * acc + c * f x := by grind
       rw [hdist]
 
+/-- Negation distributes through a fold-sum. -/
+private theorem foldl_sum_neg {R : Type u} [Lean.Grind.Ring R]
+    {α : Type v} (xs : List α) (f : α → R) (acc : R) :
+    xs.foldl (fun acc x => acc + -f x) (-acc) =
+      -xs.foldl (fun acc x => acc + f x) acc := by
+  induction xs generalizing acc with
+  | nil =>
+      simp
+  | cons x xs ih =>
+      simp only [List.foldl_cons]
+      rw [show -acc + -f x = -(acc + f x) by grind]
+      exact ih (acc + f x)
+
 /-- The fold-sum of a pointwise difference `f x - g x` equals the difference of the two
 separate fold-sums. -/
 private theorem foldl_sum_sub {R : Type u} [Lean.Grind.Ring R]
@@ -162,17 +175,19 @@ private theorem foldl_sum_sub {R : Type u} [Lean.Grind.Ring R]
     xs.foldl (fun acc x => acc + (f x - g x)) (accF - accG) =
       xs.foldl (fun acc x => acc + f x) accF -
         xs.foldl (fun acc x => acc + g x) accG := by
-  induction xs generalizing accF accG with
-  | nil =>
-      simp
-  | cons x xs ih =>
-      simp only [List.foldl_cons]
-      have hstep :
-          accF - accG + (f x - g x) =
-            (accF + f x) - (accG + g x) := by
-        grind
-      rw [hstep]
-      exact ih (accF := accF + f x) (accG := accG + g x)
+  rw [show accF - accG = accF + -accG by grind]
+  calc
+    xs.foldl (fun acc x => acc + (f x - g x)) (accF + -accG) =
+        xs.foldl (fun acc x => acc + (f x + -g x)) (accF + -accG) := by
+      apply foldl_sum_congr
+      intro x _hx
+      grind
+    _ = xs.foldl (fun acc x => acc + f x) accF -
+          xs.foldl (fun acc x => acc + g x) accG := by
+      rw [foldl_sum_add_of_acc xs f (fun x => -g x) (accF + -accG) accF (-accG)
+        (by grind)]
+      rw [foldl_sum_neg]
+      grind
 
 /-- Folding the indicator-weighted terms `(if i = l then 1 else 0) * f l` over a
 duplicate-free list containing `i` picks out exactly `f i`, adding it to the accumulator;

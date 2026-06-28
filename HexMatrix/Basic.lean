@@ -35,12 +35,12 @@ def normSq [Mul R] [Add R] [OfNat R 0] (v : Vector R n) : R :=
 
 /-- The standard basis vector with value `1` at index `i` and `0` elsewhere. -/
 @[expose]
-def unit [OfNat R 0] [OfNat R 1] (i : Fin n) : Vector R n :=
-  Vector.ofFn fun j => if i = j then 1 else 0
+def unit [Zero R] [One R] (i : Fin n) : Vector R n :=
+  Vector.ofFn fun j => if i = j then One.one else Zero.zero
 
 /-- Entry formula for a standard basis vector. -/
-@[grind =] theorem unit_getElem [OfNat R 0] [OfNat R 1] (i j : Fin n) :
-    (unit (R := R) i)[j] = if i = j then (1 : R) else 0 := by
+@[grind =] theorem unit_getElem [Zero R] [One R] (i j : Fin n) :
+    (unit (R := R) i)[j] = if i = j then One.one else Zero.zero := by
   simp [unit]
 
 end Vector
@@ -76,6 +76,47 @@ def col (M : Matrix R n m) (j : Fin m) : Vector R n :=
 @[grind =] theorem col_getElem (M : Matrix R n m) (j : Fin m) (i : Fin n) :
     (col M j)[i] = M[i][j] := by
   simp [col]
+
+/-- Replace row `dst` of `M` with the vector `v`. -/
+@[expose]
+def setRow (M : Matrix R n m) (dst : Fin n) (v : Vector R m) : Matrix R n m :=
+  M.set dst v
+
+/-- Reading back the replaced row `dst` of `setRow M dst v` yields `v`. -/
+@[grind =] theorem setRow_get_self (M : Matrix R n m) (dst : Fin n) (v : Vector R m) :
+    (setRow M dst v)[dst] = v := by
+  simp [setRow]
+
+/-- Replacing row `dst` leaves every other row unchanged. -/
+theorem setRow_row_ne (M : Matrix R n m) (dst r : Fin n) (v : Vector R m)
+    (h : r ≠ dst) :
+    (setRow M dst v)[r] = M[r] := by
+  have hval : dst.val ≠ r.val := fun hval => h (Fin.ext hval.symm)
+  exact Vector.getElem_set_ne (xs := M) (x := v) dst.isLt r.isLt hval
+
+/-- Replace column `dst` of `M` with the entry function `v`. -/
+@[expose]
+def setCol (M : Matrix R n m) (dst : Fin m) (v : Fin n → R) : Matrix R n m :=
+  ofFn fun r c => if c = dst then v r else M[r][c]
+
+/-- Entrywise characterization of `setCol`: the destination column is read from
+the replacement function and every other column is read from `M`. -/
+@[grind =] theorem setCol_getElem (M : Matrix R n m) (dst : Fin m) (v : Fin n → R)
+    (r : Fin n) (c : Fin m) :
+    (setCol M dst v)[r][c] = if c = dst then v r else M[r][c] := by
+  simp [setCol, ofFn]
+
+/-- Replacing a column by itself leaves the matrix unchanged. -/
+@[simp] theorem setCol_self (M : Matrix R n m) (dst : Fin m) :
+    setCol M dst (fun r => M[r][dst]) = M := by
+  ext r hr c hc
+  change (setCol M dst (fun r => M[r][dst]))[(⟨r, hr⟩ : Fin n)][(⟨c, hc⟩ : Fin m)] =
+    M[(⟨r, hr⟩ : Fin n)][(⟨c, hc⟩ : Fin m)]
+  rw [setCol_getElem]
+  by_cases hc' : (⟨c, hc⟩ : Fin m) = dst
+  · rw [if_pos hc']
+    exact congrArg (fun c' : Fin m => M[(⟨r, hr⟩ : Fin n)][c']) hc'.symm
+  · rw [if_neg hc']
 
 /-- The transpose of a dense matrix. -/
 @[expose]

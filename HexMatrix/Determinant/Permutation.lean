@@ -1851,7 +1851,7 @@ private theorem permutationVectors_identity_sum {R : Type u} [Lean.Grind.CommRin
         (fun acc perm => acc + detTerm (1 : Matrix R n n) perm) 0 = 1 := by
   induction n with
   | zero =>
-      simp [permutationVectors, emptyVec, detTerm, detSign, detProduct, inversionCount]
+      simp [permutationVectors, detTerm, detSign, detProduct, inversionCount]
       grind
   | succ n ih =>
       simp only [permutationVectors]

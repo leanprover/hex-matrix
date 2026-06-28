@@ -126,8 +126,9 @@ theorem dotProduct_mul_right {R : Type u} [Lean.Grind.CommRing R]
   rw [dotProduct_mul_left]
   rw [dotProduct_comm v u]
 
-/-- Dot product is homogeneous in its left argument over rationals. -/
-theorem dotProduct_smul_left_rat (c : Rat) (u w : Vector Rat n) :
+/-- Dot product is homogeneous in its left argument. -/
+theorem dotProduct_smul_left {R : Type u} [Lean.Grind.Ring R]
+    (c : R) (u w : Vector R n) :
     dotProduct (c • u) w = c * dotProduct u w := by
   rw [show c • u = Vector.ofFn (fun i : Fin n => c * u[i]) by
     ext i hi
@@ -139,34 +140,50 @@ theorem dotProduct_smul_left_rat (c : Rat) (u w : Vector Rat n) :
     simp]
   exact dotProduct_mul_left c u w
 
-/-- Dot product is homogeneous in its right argument over rationals. -/
-theorem dotProduct_smul_right_rat (c : Rat) (u v : Vector Rat n) :
+/-- Dot product is homogeneous in its right argument. -/
+theorem dotProduct_smul_right {R : Type u} [Lean.Grind.CommRing R]
+    (c : R) (u v : Vector R n) :
     dotProduct u (c • v) = c * dotProduct u v := by
   rw [dotProduct_comm u (c • v)]
-  rw [dotProduct_smul_left_rat]
+  rw [dotProduct_smul_left]
   rw [dotProduct_comm v u]
 
-/-- Dot product distributes over subtracting a scalar multiple in the left argument. -/
-theorem dotProduct_sub_smul_rat (u v w : Vector Rat n) (c : Rat) :
-    dotProduct (u - c • v) w = dotProduct u w - c * dotProduct v w := by
-  rw [show u - c • v = u + (-c) • v by
+/-- Dot product is additive over subtraction in its left argument. -/
+theorem dotProduct_sub_left {R : Type u} [Lean.Grind.Ring R]
+    (u v w : Vector R n) :
+    dotProduct (u - v) w = dotProduct u w - dotProduct v w := by
+  rw [show u - v = u + (-1 : R) • v by
     ext i hi
     let ii : Fin n := ⟨i, hi⟩
-    show (u - c • v)[ii] = (u + (-c) • v)[ii]
-    change (u - c • v)[i] = (u + (-c) • v)[i]
-    rw [Vector.getElem_sub, Vector.getElem_add, Vector.getElem_smul, Vector.getElem_smul]
-    change u[i] - c * v[i] = u[i] + (-c) * v[i]
+    show (u - v)[ii] = (u + (-1 : R) • v)[ii]
+    change (u - v)[i] = (u + (-1 : R) • v)[i]
+    rw [Vector.getElem_sub, Vector.getElem_add, Vector.getElem_smul]
+    change u[i] - v[i] = u[i] + (-1 : R) * v[i]
     grind]
-  rw [dotProduct_add_left, dotProduct_smul_left_rat]
-  change dotProduct u w + (-c) * dotProduct v w = dotProduct u w - c * dotProduct v w
+  rw [dotProduct_add_left, dotProduct_smul_left]
+  change dotProduct u w + (-1 : R) * dotProduct v w =
+    dotProduct u w - dotProduct v w
   grind
 
-/-- Dot product distributes over subtracting a scalar multiple in the right argument. -/
-theorem dotProduct_sub_smul_right_rat (u v w : Vector Rat n) (c : Rat) :
-    dotProduct u (v - c • w) = dotProduct u v - c * dotProduct u w := by
-  rw [dotProduct_comm u (v - c • w)]
-  rw [dotProduct_sub_smul_rat]
+/-- Dot product is additive over subtraction in its right argument. -/
+theorem dotProduct_sub_right {R : Type u} [Lean.Grind.CommRing R]
+    (u v w : Vector R n) :
+    dotProduct u (v - w) = dotProduct u v - dotProduct u w := by
+  rw [dotProduct_comm u (v - w)]
+  rw [dotProduct_sub_left]
   rw [dotProduct_comm v u, dotProduct_comm w u]
+
+/-- Dot product distributes over subtracting a scalar multiple in the left argument. -/
+theorem dotProduct_sub_smul_left {R : Type u} [Lean.Grind.Ring R]
+    (u v w : Vector R n) (c : R) :
+    dotProduct (u - c • v) w = dotProduct u w - c * dotProduct v w := by
+  rw [dotProduct_sub_left, dotProduct_smul_left]
+
+/-- Dot product distributes over subtracting a scalar multiple in the right argument. -/
+theorem dotProduct_sub_smul_right {R : Type u} [Lean.Grind.CommRing R]
+    (u v w : Vector R n) (c : R) :
+    dotProduct u (v - c • w) = dotProduct u v - c * dotProduct u w := by
+  rw [dotProduct_sub_right, dotProduct_smul_right]
 
 end Vector
 

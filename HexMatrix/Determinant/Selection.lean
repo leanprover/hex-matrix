@@ -26,7 +26,7 @@ recurses on the remaining prefix with the smaller bound `c.val`. -/
 @[expose]
 def selectedColumnTuplesUpTo (m : Nat) :
     (n : Nat) → (bound : Nat) → List (Vector (Fin m) n)
-  | 0, _ => [emptyVec]
+  | 0, _ => [#v[]]
   | n + 1, bound =>
       ((List.finRange m).filter (fun c : Fin m => decide (c.val < bound))).flatMap
         fun c =>
@@ -44,8 +44,8 @@ def selectedColumnTuples (n m : Nat) : List (Vector (Fin m) n) :=
 def IsStrictlyIncreasingColumnTuple {m n : Nat} (cols : Vector (Fin m) n) : Prop :=
   ∀ i j : Fin n, i.val < j.val → cols[i].val < cols[j].val
 
-private theorem isStrictlyIncreasingColumnTuple_emptyVec {m : Nat} :
-    IsStrictlyIncreasingColumnTuple (m := m) (n := 0) emptyVec := by
+private theorem isStrictlyIncreasingColumnTuple_nil {m : Nat} :
+    IsStrictlyIncreasingColumnTuple (m := m) (n := 0) #v[] := by
   intro i _ _
   exact i.elim0
 
@@ -95,9 +95,11 @@ private theorem mem_selectedColumnTuplesUpTo_imp {m : Nat} :
           ∀ i : Fin n, v[i].val < bound
   | 0, _, v, hv => by
       simp [selectedColumnTuplesUpTo] at hv
-      subst hv
-      refine ⟨isStrictlyIncreasingColumnTuple_emptyVec, ?_⟩
-      intro i; exact i.elim0
+      refine ⟨?_, ?_⟩
+      · intro i _ _
+        exact i.elim0
+      · intro i
+        exact i.elim0
   | n + 1, bound, v, hv => by
       rw [selectedColumnTuplesUpTo, List.mem_flatMap] at hv
       rcases hv with ⟨c, hc, hmem⟩
@@ -132,7 +134,7 @@ private theorem mem_selectedColumnTuplesUpTo_of_strictly_increasing {m : Nat} :
         (∀ i : Fin n, v[i].val < bound) →
         v ∈ selectedColumnTuplesUpTo m n bound
   | 0, _, v, _, _ => by
-      have hv : v = emptyVec := by
+      have hv : v = #v[] := by
         ext i hi
         exact absurd hi (by omega)
       simp [selectedColumnTuplesUpTo, hv]
