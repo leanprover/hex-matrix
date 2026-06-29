@@ -7,7 +7,6 @@ Authors: Kim Morrison
 module
 
 public import HexMatrix.Basic
-public import Batteries.Data.List.Lemmas
 
 public section
 
@@ -52,8 +51,7 @@ private theorem foldl_sum_start {R : Type u} [Lean.Grind.Ring R]
       grind
   | cons x xs ih =>
       simp only [List.foldl_cons]
-      rw [ih (acc := acc + f x)]
-      rw [ih (acc := (0 : R) + f x)]
+      rw [ih (acc := acc + f x), ih (acc := (0 : R) + f x)]
       grind
 
 /-- Two fold-sums over `xs` agree when their summand functions `f` and `g` agree
@@ -127,8 +125,7 @@ private theorem foldl_sum_comm {R : Type u} [Lean.Grind.Ring R]
         intro y _hy
         rw [foldl_sum_start xs (fun x' => g x' y) (0 + g x y)]
         grind
-      rw [hinner]
-      rw [foldl_sum_add]
+      rw [hinner, foldl_sum_add]
       grind
 
 /-- Right multiplication by `c` distributes through a fold-sum, scaling each summand `f x`
@@ -216,8 +213,7 @@ private theorem foldl_indicator_mul_unique {R : Type u} [Lean.Grind.Ring R]
           have hxy : x ≠ y := fun heq => (List.nodup_cons.mp hnodup).1 (heq ▸ hy)
           rw [if_neg hxy]
           grind
-        rw [if_pos rfl]
-        rw [foldl_add_eq_acc_ring xs _ _ hxs_zero]
+        rw [if_pos rfl, foldl_add_eq_acc_ring xs _ _ hxs_zero]
         grind
       · have hxi : i ≠ x := by
           intro heq
@@ -236,7 +232,7 @@ theorem mul_assoc_vec [Lean.Grind.Ring R]
     (A * B) * v = A * (B * v) := by
   ext i hi
   let ii : Fin n := ⟨i, hi⟩
-  simp [HMul.hMul, mulVec, mul, row, col, Hex.Vector.dotProduct, ofFn]
+  simp [HMul.hMul, mulVec, mul, row, col, Vector.dotProduct, ofFn]
   change
     (List.finRange k).foldl
         (fun acc l =>
@@ -281,9 +277,9 @@ theorem transpose_mul_of_mul_comm [Lean.Grind.CommRing R]
   let ii : Fin k := ⟨i, hi⟩
   let jj : Fin n := ⟨j, hj⟩
   change (Matrix.transpose (A * B))[ii][jj] = (Matrix.transpose B * Matrix.transpose A)[ii][jj]
-  rw [transpose_getElem]
+  rw [getElem_transpose]
   change (A * B)[jj][ii] = (Matrix.transpose B * Matrix.transpose A)[ii][jj]
-  simp [HMul.hMul, mul, row, col, transpose, Hex.Vector.dotProduct, ofFn]
+  simp [HMul.hMul, mul, row, col, transpose, Vector.dotProduct, ofFn]
   change
     (List.finRange m).foldl (fun acc l => acc + A[jj][l] * B[l][ii]) 0 =
       (List.finRange m).foldl (fun acc l => acc + B[l][ii] * A[jj][l]) 0
@@ -296,7 +292,7 @@ theorem transpose_mul_of_mul_comm [Lean.Grind.CommRing R]
     (1 : Matrix R n n) * v = v := by
   ext i hi
   let ii : Fin n := ⟨i, hi⟩
-  simp [HMul.hMul, mulVec, row, Hex.Vector.dotProduct]
+  simp [HMul.hMul, mulVec, row, Vector.dotProduct]
   change (List.finRange n).foldl
       (fun acc j => acc + (1 : Matrix R n n)[ii][j] * v[j]) 0 =
     v[ii]
@@ -320,7 +316,7 @@ theorem transpose_mul_of_mul_comm [Lean.Grind.CommRing R]
   let ii : Fin n := ⟨i, hi⟩
   let jj : Fin m := ⟨j, hj⟩
   change ((1 : Matrix R n n) * M)[ii][jj] = M[ii][jj]
-  simp [HMul.hMul, mul, row, col, Hex.Vector.dotProduct]
+  simp [HMul.hMul, mul, row, col, Vector.dotProduct]
   simp [ofFn]
   change
     (List.finRange n).foldl
@@ -346,7 +342,7 @@ theorem transpose_mul_of_mul_comm [Lean.Grind.CommRing R]
   let ii : Fin n := ⟨i, hi⟩
   let jj : Fin m := ⟨j, hj⟩
   change (M * (1 : Matrix R m m))[ii][jj] = M[ii][jj]
-  simp [HMul.hMul, mul, row, col, Hex.Vector.dotProduct]
+  simp [HMul.hMul, mul, row, col, Vector.dotProduct]
   simp [ofFn]
   change
     (List.finRange m).foldl
@@ -374,7 +370,7 @@ theorem mul_assoc [Lean.Grind.Ring R]
   let ii : Fin n := ⟨i, hi⟩
   let jj : Fin l := ⟨j, hj⟩
   change ((A * B) * C)[ii][jj] = (A * (B * C))[ii][jj]
-  simpa [HMul.hMul, mulVec, mul, row, col, Hex.Vector.dotProduct, ofFn] using
+  simpa [HMul.hMul, mulVec, mul, row, col, Vector.dotProduct, ofFn] using
     congrArg (fun v => v[ii]) (mul_assoc_vec A B (col C jj))
 
 /-- Matrix-vector multiplication sends the zero vector to the zero vector. -/
@@ -382,7 +378,7 @@ theorem mul_assoc [Lean.Grind.Ring R]
     A * (0 : Vector R m) = 0 := by
   ext i hi
   let ii : Fin n := ⟨i, hi⟩
-  simp [HMul.hMul, mulVec, row, Hex.Vector.dotProduct]
+  simp [HMul.hMul, mulVec, row, Vector.dotProduct]
   change (List.finRange m).foldl (fun acc j => acc + A[ii][j] * (0 : R)) 0 = 0
   apply foldl_add_eq_acc_ring
   intro j _hj
@@ -393,7 +389,7 @@ theorem mul_assoc [Lean.Grind.Ring R]
     (0 : Matrix R n m) * v = 0 := by
   ext i hi
   let ii : Fin n := ⟨i, hi⟩
-  simp [HMul.hMul, mulVec, row, Hex.Vector.dotProduct]
+  simp [HMul.hMul, mulVec, row, Vector.dotProduct]
   change (List.finRange m).foldl (fun acc j => acc + (0 : Matrix R n m)[ii][j] * v[j]) 0 = 0
   apply foldl_add_eq_acc_ring
   intro j _hj
@@ -407,7 +403,7 @@ theorem sub_identity_mulVec [Lean.Grind.Ring R] (Q : Matrix R n n) (v : Vector R
       mulVec (R := R) (n := n) (m := n) Q v - v := by
   ext i hi
   let ii : Fin n := ⟨i, hi⟩
-  simp [mulVec, row, Hex.Vector.dotProduct, ofFn]
+  simp [mulVec, row, Vector.dotProduct, ofFn]
   change
     (List.finRange n).foldl
         (fun acc j => acc + (Q[ii][j] - if ii = j then 1 else 0) * v[j]) 0 =
