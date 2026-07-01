@@ -37,7 +37,7 @@ def B : Matrix Int 3 2 := Matrix.ofFn fun i j => (i * j : Int)
 -- Elementary row operations are pure data transforms.
 #eval Matrix.rowSwap A 0 1
 #eval Matrix.rowScale A 0 5
-#eval (1 : Matrix Int 3 3)         -- the 3×3 identity
+#eval Matrix.identity (R := Int) 3 -- the 3×3 identity
 ```
 
 # Functionality
@@ -68,6 +68,11 @@ and inverse-preservation lemmas for the elementary operations.
 The `Semiring` / `Ring` structure and the equivalence with Mathlib's
 `Matrix`, which let you transfer Mathlib's linear-algebra results, live in
 [`hex-matrix-mathlib`](https://github.com/kim-em/hex-matrix-mathlib).
+
+# Reference manual
+
+The hex reference manual covers this library at
+<https://kim-em.github.io/hex-dev/find/?domain=Verso.Genre.Manual.section&name=hex-matrix>.
 
 # Contributing
 

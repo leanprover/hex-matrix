@@ -4,7 +4,7 @@ defaultTargets = ["HexMatrix"]
 [[require]]
 name = "HexBasic"
 git = "https://github.com/kim-em/hex-basic.git"
-rev = "c9cb6bcb3287ea0870f66c9dfcba08baa08f97f6"
+rev = "f1580d28c2e9ff9e8d4d7cdef9dccbaa17780b03"
 
 [[lean_lib]]
 name = "HexMatrix"
