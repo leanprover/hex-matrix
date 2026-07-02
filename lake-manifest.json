@@ -3,7 +3,7 @@
   "packagesDir": ".lake/packages",
   "packages": [
     {
-      "url": "https://github.com/kim-em/hex-basic.git",
+      "url": "https://github.com/leanprover/hex-basic.git",
       "type": "git",
       "subDir": null,
       "scope": "",

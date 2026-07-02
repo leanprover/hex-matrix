@@ -3,7 +3,7 @@
   "packagesDir": ".lake/packages",
   "packages": [
     {
-      "url": "https://github.com/kim-em/hex-basic.git",
+      "url": "https://github.com/leanprover/hex-basic.git",
       "type": "git",
       "subDir": null,
       "scope": "",
@@ -15,14 +15,14 @@
       "configFile": "lakefile.toml"
     },
     {
-      "url": "https://github.com/kim-em/hex-test-kit.git",
+      "url": "https://github.com/leanprover/hex-test-kit.git",
       "type": "git",
       "subDir": null,
       "scope": "",
-      "rev": "fb92d2703a2acf842d906044feef028c9ab924aa",
+      "rev": "610207eec0ca214928eec42a6dd2084d859bf94d",
       "name": "\u00abhex-test-kit\u00bb",
       "manifestFile": "lake-manifest.json",
-      "inputRev": "fb92d2703a2acf842d906044feef028c9ab924aa",
+      "inputRev": "610207eec0ca214928eec42a6dd2084d859bf94d",
       "inherited": false,
       "configFile": "lakefile.toml"
     },

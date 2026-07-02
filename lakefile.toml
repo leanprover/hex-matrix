@@ -3,7 +3,7 @@ defaultTargets = ["HexMatrix"]
 
 [[require]]
 name = "HexBasic"
-git = "https://github.com/kim-em/hex-basic.git"
+git = "https://github.com/leanprover/hex-basic.git"
 rev = "f1580d28c2e9ff9e8d4d7cdef9dccbaa17780b03"
 
 [[lean_lib]]
