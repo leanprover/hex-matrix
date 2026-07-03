@@ -106,7 +106,7 @@ private theorem foldl_dotProduct_unit_body {R : Type u} [Lean.Grind.CommRing R]
 @[simp] theorem dotProduct_unit_unit {R : Type u} [Lean.Grind.CommRing R] {n : Nat}
     (i j : Fin n) :
     dotProduct (unit R i) (unit R j) = if i = j then 1 else 0 := by
-  unfold dotProduct
+  simp only [dotProduct]
   rw [foldl_dotProduct_unit_body]
   by_cases hij : i = j
   · subst hij
@@ -139,6 +139,27 @@ def gramMatrix [Mul R] [Add R] [OfNat R 0] (M : Matrix R n m) : Matrix R n n :=
     (M : Matrix R n m) (i j : Fin n) :
     (gramMatrix M)[i][j] = (row M i).dotProduct (row M j) := by
   rw [gramMatrix, getElem_ofFn]
+
+/-- Row `i` of the Gram matrix pairs `row M i` against every row of `M`. -/
+@[simp, grind =] theorem row_gramMatrix [Mul R] [Add R] [OfNat R 0]
+    (M : Matrix R n m) (i : Fin n) :
+    row (gramMatrix M) i = Vector.ofFn fun j => (row M i).dotProduct (row M j) := by
+  ext j hj
+  show (row (gramMatrix M) i)[(⟨j, hj⟩ : Fin n)] =
+    (Vector.ofFn fun j => (row M i).dotProduct (row M j))[(⟨j, hj⟩ : Fin n)]
+  rw [getElem_row, getElem_gramMatrix]
+  simp
+
+/-- Column `j` of the Gram matrix pairs every row of `M` against `row M j`.
+The Gram matrix is symmetric, so this matches `row_gramMatrix`. -/
+@[simp, grind =] theorem col_gramMatrix [Mul R] [Add R] [OfNat R 0]
+    (M : Matrix R n m) (j : Fin n) :
+    col (gramMatrix M) j = Vector.ofFn fun i => (row M i).dotProduct (row M j) := by
+  ext i hi
+  show (col (gramMatrix M) j)[(⟨i, hi⟩ : Fin n)] =
+    (Vector.ofFn fun i => (row M i).dotProduct (row M j))[(⟨i, hi⟩ : Fin n)]
+  rw [getElem_col, getElem_gramMatrix]
+  simp
 
 /-- The Gram matrix of the identity is the identity. -/
 @[simp, grind =] theorem gramMatrix_identity {R : Type u} [Lean.Grind.CommRing R] {n : Nat} :
