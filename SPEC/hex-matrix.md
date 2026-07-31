@@ -14,12 +14,42 @@ Dense matrices over a coefficient type `R`.
 - Submatrix / leading-submatrix slicing and the Gram matrix
 - Generic over the coefficient type `R`
 
+**Backing representation (required): flat row-major `Vector R (n * m)`.**
+The opaque one-field structure wraps a single contiguous buffer holding the
+`n * m` entries in row-major order: entry `(i, j)` lives at flat index
+`i * m + j`, and row `i` occupies the contiguous span
+`data[i*m .. i*m + m)`. The layout-order decision (row-major `n * m` versus
+column-major `m * n`) was settled by the two deciding workloads:
+
+- *Elementary row operations dominate the elimination stack.* `rowSwap`,
+  `rowScale`, `rowAdd`, `modifyRow`, and the `mapRowsIdx`-based column
+  scatters each touch the `m` entries of one row, and the elimination
+  consumers (`hex-row-reduce`, `hex-bareiss`, `hex-lll`) issue `O(n²)` such
+  calls per run; `getRow` is the most-used accessor family-wide. Row-major
+  makes every one of these a contiguous span of the single buffer, updated
+  in place when the buffer is uniquely referenced. Column-major would
+  stride them all.
+- *`mulImpl`'s transpose step survives.* Under row-major the columns of the
+  right operand are non-contiguous (stride `m`), which is exactly why
+  `mulImpl` transposes once up front; the step is retained unchanged, a
+  one-time `O(m·k)` pass amortized against the `O(n·m·k)` product.
+  Column-major would let the right operand skip that transpose, but at the
+  cost of striding the far more numerous row-op workload — the wrong trade.
+- *Strassen block strides fall out naturally.* A quadrant sub-block of the
+  row-major buffer is an offset-and-stride window (row offset `r0`, column
+  offset `c0`, row stride `m`; entry `(i, j)` of the view at
+  `backing[(r0 + i) * m + (c0 + j)]`), the view type the copy-free Strassen
+  schedule needs (see "Avoiding sub-block copies").
+
 **Entry vs row access.** `M[(i, j)]` is the O(1) entry accessor and the normal
-form for single entries. Row access `M[i]` is deliberately `noncomputable`: it
-exists only so proofs may speak of whole rows, while compiled code reads rows
-through the computable `getRow` and entries through `M[(i, j)]`. Any compiled
-definition that reaches for `M[i]` fails to compile, so a future flat backing
-representation never silently pays a per-entry row-materialization cost.
+form for single entries — one flat read at `i * m + j`. Row access `M[i]` is
+deliberately `noncomputable`: it exists only so proofs may speak of whole rows,
+while compiled code reads rows through the computable `getRow` (one contiguous
+copy of the row span) and entries through `M[(i, j)]`. Any compiled definition
+that reaches for `M[i]` fails to compile, so the flat backing never silently
+pays a per-entry row-materialization cost. `rows` materializes all rows and is
+the (O(n·m)) observation the row-level lemma layer is stated against, not a
+compiled hot-path accessor.
 
 This is the dense base of the matrix family. The row-reduction stack
 (`hex-row-reduce`), the Leibniz determinant theory (`hex-determinant`), and the
@@ -31,17 +61,23 @@ representation. Their algebraic identities (involutivity of `rowSwap`,
 multiplicative behaviour `rowSwap_mul` / `rowScale_mul` / `rowAdd_mul`, and the
 inverse-preservation lemmas) live here and are reused by row reduction and by
 the determinant row-operation laws. They update the matrix in place when it is
-uniquely referenced: each uses its argument linearly and goes through
-`Vector.swap` / `Vector.modify` / `Vector.map`, which reuse the backing store
+uniquely referenced: each uses its argument linearly and writes the affected
+row spans of the single flat buffer through `Vector.set` / `Vector.swap`
+loops (`writeRow` and the `swap` column loop), which reuse the backing store
 rather than copying it.
 
-**Indexed row/column mutation.** `modifyRow` updates one row in place;
-`setCol` and the per-entry `modifyCol` update one column entry per row. The
-column operations share an in-place engine, `mapRowsIdx`, which threads the
-matrix through a `Fin.foldl` of per-row `Vector.modify`s — no intermediate index
-list is allocated, and each row's single-entry update reuses the freed row slot.
-This replaces the former `ofFn`-rebuild form of `setCol`, which read and
-reallocated every entry to change one column.
+**Indexed row/column mutation.** `modifyRow` updates one row span in place;
+`setCol` and the per-entry `modifyCol` update one column entry per row through
+flat per-entry folds over the single buffer. The column *analogues* of the
+elementary operations (`colAdd`, `colAddRight`, `colSwap`) run the same flat
+per-entry column engine: each reads the source column(s) once into a borrowed
+`O(n)` vector, then writes the destination column entries in place through
+`modifyCol` (`colAdd`/`colAddRight`) or two `setCol` passes (`colSwap`) — one
+single-entry flat-buffer write per row, reusing the backing store when the
+matrix is uniquely referenced, with no row materialization. This replaced the
+former `mapRows` form, which materialized every row and reflattened, and the
+former `ofFn`-rebuild form of `setCol`, which read and reallocated every entry
+to change one column.
 
 **Key properties:**
 - identity matrices act as left and right multiplicative identities
@@ -93,29 +129,34 @@ generic `mul`: `mul` has no `[Sub R]`. This is a correction to the issue's
 literal wording "just use it by default in matrix multiplication at runtime".
 The generic-semiring `*` on `Matrix R n n` keeps the naive `mul` as its
 universal, type-correct fallback. Every coefficient type the project actually
-multiplies (`Int`, `Rat`, `ZMod64`, `Fp`) is a ring, so `mulStrassen` covers
-every real caller (`hex-determinant`, `hex-bareiss`, `hex-row-reduce`,
-`hex-lll`).
+multiplies (`Int`, `Rat`, `ZMod64`, `Fp`) is a ring, so `mulStrassen` is
+available to every ring-typed caller.
 
 Making Strassen "the default at runtime" therefore has a concrete, stated
 mechanism, not an implicit one:
 
-1. `mulStrassen` is the ring-level entry point: a computable recursive `def`
-   whose compiled body runs at runtime. The naive `mul` stays the semantic
-   reference it is proved equal to (`mulStrassen_eq_mul`). Unlike `mul`,
-   `mulStrassen` needs no `@[csimp]` twin, because it is already the fast body
-   rather than a kernel-facing specification with a slow reference form. If a
-   later `decide` cross-check needs `mulStrassen` to reduce cheaply in the
-   kernel, add a `mulStrassenImpl` twin with a proved
-   `@[csimp] mulStrassen_eq_impl`, mirroring `mul` / `mulImpl` /
-   `mul_eq_mulImpl`, never `@[implemented_by]`.
-2. The hot ring-typed callers listed above are switched to call `mulStrassen`
-   instead of `*`. That caller switch is mechanical follow-up work, tracked
-   separately, not part of this SPEC.
+1. `mulStrassen` remains the ring-level reference entry point and the theorem
+   `mulStrassen_eq_mul` continues to state its equality to naive `mul`.
+   Compiled calls are transferred to the storage-scheduled
+   `mulStrassenImpl` by the proved function equality
+   `@[csimp] mulStrassen_eq_impl : @mulStrassen = @mulStrassenImpl`, mirroring
+   `mul` / `mulImpl` / `mul_eq_mulImpl`, never `@[implemented_by]`.
+2. Ring-typed callers with genuine matrix-matrix products opt in by calling
+   `mulStrassen` at their own call sites. A survey of the tree found no such
+   caller: the dense consumers (`hex-determinant`, `hex-bareiss`,
+   `hex-row-reduce`, `hex-lll`, and the `hex-berlekamp` nullspace) are
+   elimination-based — row operations, not products; the Gram matrices are
+   built entrywise as dot products and exploit a symmetry a materialized
+   product would forfeit; and the LLL same-lattice certificate checks product
+   equality through packed dot products cheaper than any materialized product.
+   So no caller switch exists to perform, and `mulStrassen` is the entry point
+   a future product-shaped caller (for example matrix powering) adopts
+   directly.
 3. Widening `mul` itself to require `[Sub R]`, or redirecting the
    `Mul (Matrix R n n)` instance once the coefficient algebra is known to be a
-   ring, are possible later API changes. Both are out of scope here and neither
-   is needed for the callers above.
+   ring, are possible later API changes. Both are out of scope here and
+   neither is needed today, since no executable caller multiplies through the
+   instance.
 
 ### The Winograd schedule
 
@@ -209,42 +250,69 @@ condition is config-independent.
 
 ### Avoiding sub-block copies
 
-The four quadrants of `A`, `B`, and `C` are **views**, not freshly materialized
-matrices: a view is a backing matrix together with a row offset, a column
-offset, and the two block dimensions. Reading a quadrant entry adds the offset
-and indexes the backing store. The recursive splitting therefore allocates
-nothing for the quadrants themselves. The internal recursion is stated over this
-view type, not over `Matrix`. Only when a block drops below the cutoff does the
-recursion **materialize** that small view into a `Matrix` and hand it to
-`cfg.baseMul`, which is why the public `baseMul` keeps the clean
+The four quadrants of `A` and `B` are **views** (`Submatrix`, named in the
+`Subarray`/`Substring` style), not freshly materialized matrices: a `Submatrix`
+is a backing matrix together with a row offset, a column offset, the two block
+dimensions (type indices), and the real-data extent (`rhi`/`chi`, one past the
+last real row/column in backing coordinates). Reading a quadrant entry adds the
+offset and indexes the shared backing store when the position holds real data
+(`r0 + i < rhi ∧ c0 + j < chi`) and returns `0` in the zero-pad fringe otherwise.
+The recursive splitting therefore never materializes or copies a quadrant buffer (only O(1) view records)
+— `Submatrix.toBlocks₁₁ … toBlocks₂₂` are pure offset/extent arithmetic. Because
+the backing dims never change through the recursion, `r0 + i < rhi` is the exact
+real-vs-pad test at every nesting depth, so widening a view to even dimensions
+(`Submatrix.pad`) before a split is likewise a copy-free reshape. The internal
+recursion `mulStrassenView` is stated over this view type, not over `Matrix`.
+Only when a block drops below the cutoff does the recursion **materialize** that
+small view into a `Matrix` (`Submatrix.toMatrix`) and hand it to `cfg.baseMul`,
+which is why the public `baseMul` keeps the clean
 `Matrix R n m → Matrix R m k → Matrix R n k` type: views inside the recursion,
 a materialized `Matrix` at each leaf.
 
 The `Sᵢ` and `Tᵢ` operand sums are genuinely new values, so the *logical*
-schedule names fifteen sums. The *storage* schedule is separate: Boyer-Dumas-
-Pernet-Zhou show the product needs only two auxiliary `(n/2)²` buffers beyond
-the recursion, reusing them across the `Sᵢ`/`Tᵢ`/`Pᵢ` steps and adding the `Uᵢ`
-results directly into the `C` quadrant views so the output assembles in place
-with no quadrant copy-back. The first correct implementation may use the naive
-storage (one buffer per sum) and the storage schedule is a later refinement; the
-logical schedule and the correctness proof do not depend on which storage
-schedule is used.
+schedule names fifteen sums. The *storage* schedule is separate:
+`mulStrassenImpl` implements the Boyer-Dumas-Pernet-Zhou two-buffer schedule
+at square, even recursion nodes. It reuses two auxiliary `(n/2)²` matrices
+`X` and `Y`, writes each recursive product directly into one of the four
+output quadrants, and accumulates the `Uᵢ` values there without a
+`fromBlocks` copy. Rectangular top-level inputs and odd square recursion nodes
+retain `mulStrassenView` as the shape-safe fallback; reaching an odd node
+reverts that node's entire subtree, so a dimension such as 1000 uses the
+schedule for `1000 → 500 → 250` and the reference below 125.
 
-A block view is feasible on the current backing too: the row-of-rows
-`Vector (Vector R m) n` reads `backing[r0+i][c0+j]` at essentially the cost of a
-flat buffer's offset access, so quadrant *reads* need no copy. What a **flat**
-backing representation `Vector R (n*m)` buys is different: stride-and-cache
-locality across a whole block, cheap bulk materialization of a leaf block for the
-base kernel, and column-contiguous views (which the row-of-rows backing does not
-give cheaply). A block view is then offset-and-stride arithmetic into one shared
-buffer. `Hex.Matrix` is deliberately an opaque one-field structure (design
-principle 10) precisely so this switch stays invisible to consumers. Until it
-lands, an interim implementation has a choice: recurse over a view type that
-reads the row-of-rows backing in place, or recurse over materialized `Matrix`
-quadrants (reusing the existing matrix add and subtract) and pay the copies. The
-recursion and the correctness proof are identical either way. The flat-backing switch is tracked as separate
-follow-up work; it is a representation change to `hex-matrix`, not a change to
-this algorithm.
+Writes use `Region`, a backing-free rectangle descriptor containing offsets
+and bounds proofs but no matrix. One owned output `Matrix` is threaded through
+every write and recursive call; quadrant descriptors therefore cannot create
+four aliases of its backing. Each update operates directly on the owned
+region. Row-start arithmetic is hoisted outside the column loop; overwrite
+and accumulation both read the needed entries and then thread the consumed
+array through one `lean_array_fset`, without a copy-out/copy-back row. The
+generated C can therefore reuse the array when uniquely referenced. The
+writer's proof has a stronger
+frame property: it returns exactly the reference
+result in its destination and preserves every disjoint region. This proves the
+complete BDPZ accumulation order without introducing ring assumptions into
+the equality transfer.
+
+The **flat row-major backing** (see "Backing representation" above) is what
+makes such views cheap: stride-and-cache locality across a whole block, cheap
+bulk materialization of a leaf block for the base kernel, and a block view
+that is pure offset-and-stride arithmetic into one shared buffer
+(`backing[(r0 + i) * m + (c0 + j)]`). `Hex.Matrix` is deliberately an opaque
+one-field structure (design principle 10) precisely so that representation
+switch stayed invisible to consumers when it landed. The recursion runs over
+the `Submatrix` view type (backing matrix plus row/column offsets plus block
+dimensions plus real-data extent). The reference recursion still exposes the
+logical `Sᵢ`/`Tᵢ`/`Uᵢ`, product, assembly, and crop allocations; the compiled
+square/even path replaces that node-local storage with `X`, `Y`, and the
+already-owned output, while leaf materialization remains for `cfg.baseMul`.
+Correctness reduces to the
+same three lemmas: a view-to-matrix abstraction lemma (`toMatrix` of a quadrant
+view equals `toBlocks` of the materialized parent, and `toMatrix` of a widened
+view equals `Matrix.pad` of the materialized source) carries the view recursion
+`mulStrassenView` down to the `mul`-level Winograd/block/padding decomposition,
+so the recursion and the correctness proof are identical to the `Matrix`-level
+form the migration first shipped.
 
 ### Correctness
 
@@ -309,23 +377,26 @@ Strassen exponent is only a diagnostic, not an acceptance condition: near the
 cutoff the Strassen curve is in a crossover transient, and on the row-of-rows
 backing the locality overhead and the limited benched sizes bend the fit above
 `2.81`. The exponent approaches `log₂ 7` only once the sizes are large enough or
-the flat backing lands (see the representation note below). The point the figure must make is the visibly
+the `Submatrix` view recursion lands on the flat backing (see the representation
+note below). The point the figure must make is the visibly
 shallower Strassen slope: Strassen lowers the asymptotic order, not merely the
 constant factor. A speedup table
 that fits both exponents by ordinary least squares over the asymptotic window,
 as `hex-lll-scaling.py` does, accompanies the figure.
 
 The measured crossover is representation-dependent, so the bench records which
-backing it ran on. On the current `Vector (Vector R m) n` row-of-rows backing,
-`mulStrassen` pays for worse stride-and-cache locality across a block, and for
-whatever leaf or quadrant materialization the interim implementation chooses (see
-"Avoiding sub-block copies"). Both raise the crossover, so a poor crossover
-measured here is partly a representation artifact rather than a verdict on the
-algorithm. A flat `Vector R (n*m)` backing is expected to lower the crossover, and
-it shifts the naive baseline too, because it changes allocation and cache
-behaviour and how the transpose step is expressed. That switch is a separate `hex-matrix`
-change, tracked in its own issue and measured there as a before/after overlay on
-this same multiply bench, not folded into the Strassen crossover reported here.
+backing it ran on. The flat row-major switch itself was measured as a
+before/after overlay on this same multiply bench: **neutral on the multiply
+surface** (naive `1.00–1.02×`, default-config `mulStrassen` `0.98–1.00×`
+across `64…1024`; identical checksums) with a small Bareiss elimination cost
+(`1–4%`, shrinking with `n`). The multiply hot paths were already
+row-contiguous under row-of-rows, so parity is the expected reading; what the
+flat backing changes for Strassen is not these curves but the cost model of
+the *recursion's internals* — quadrant materialization and leaf handling —
+which is why the crossover gets re-measured when the `Submatrix`-view
+recursion (see "Avoiding sub-block copies") replaces materialized quadrants,
+not before. That re-measurement is recorded with the shipped
+`strassenDefault.cutoff` in `HexMatrix/Strassen.lean`.
 
 ### A demonstration non-default config
 
@@ -338,13 +409,15 @@ size-specialized kernel is therefore written as a single function that dispatche
 on the runtime dimensions and falls back to the naive kernel off its fast path.
 
 The demonstration config targets the Barrett-reduced prime-field residues
-(`ZMod64` / `Fp`) that `hex-berlekamp` multiplies in its nullspace computation
-(`HexBerlekamp/RabinSoundness/KernelWitness.lean`). The default base kernel
-reduces modulo `p` after every multiply-add through `BarrettCtx.mulMod`. The
-demonstration kernel instead accumulates each dot product in a wide accumulator
-and reduces less often. It must use the **periodic-reduction** form, reducing the
-accumulator modulo `p` every fixed number of terms chosen to preclude overflow,
-not a single reduction at the end over a 128-bit accumulator. The reason is that
+(`ZMod64` / `Fp`) as a standalone kernel for future product-shaped callers. The
+current tree has no production matrix-matrix consumer to route through it:
+Berlekamp nullspace and the other dense consumers use elimination or individual
+dot products, as recorded in the caller survey above. The default base kernel
+reduces modulo `p` after every multiply-add. The demonstration kernel instead
+accumulates each dot product in a wide accumulator and reduces less often. It
+must use the **periodic-reduction** form, reducing the accumulator modulo `p`
+every fixed number of terms chosen to preclude overflow, not a single reduction
+at the end over a 128-bit accumulator. The reason is that
 `Valid` quantifies over all `n`, `m`, `k`, and at a base-case leaf only one
 dimension is guaranteed below the cutoff: the inner dimension `m` (the dot-product
 length) can be arbitrarily large, so a fixed-width accumulator with one final
@@ -357,11 +430,10 @@ and it is `Valid` because reduction modulo `p` is a ring homomorphism, so the
 periodically-reduced sum has the same residue as reducing at each step. The proof
 is more than one lemma: it needs an accumulator invariant (the running sum modulo
 `p`), the per-window no-overflow bound, the final-reduction step, and the equality
-to the `ZMod64` / `Fp` dot product the naive kernel computes. `BarrettCtx` has no
-wide-accumulator layer today, so the small verified `UInt128` (or `UInt64`-pair
-carry) add-and-reduce lemmas the bound needs are themselves a deliverable of this
-config. `BarrettCtx.toNat_mulMod` is only the single-multiply building block in
-that chain, not the whole proof.
+to the `ZMod64` / `Fp` dot product the naive kernel computes. The verified
+two-word layer in `HexArith/Barrett/Accumulator.lean` supplies the add, reduce,
+and fold lemmas; `HexBerlekamp/DelayedKernel.lean` bridges the fold to the
+`ZMod64` dot product and the polymorphic matrix base kernel.
 
 Two honesty constraints on this config. First, a base kernel fires only below
 the cutoff, so it moves the constant factor and the crossover, never the
@@ -374,6 +446,20 @@ alternate config that still exercises the plug-in path, and the delayed-reductio
 kernel becomes follow-up work. A GF(2) four-Russians base kernel would be the
 strongest showcase, but the project has no bit-packed GF(2) matrix
 representation, so it is out of scope here.
+
+The shipped `strassenBarrett` uses a 4096-term window. The accumulator proof
+shows that the high word grows by at most one per product, so every unreduced
+window fits below `2^128`; reducing a window and the final partial window
+preserves the running residue for arbitrary inner dimension. The committed
+measurement compares `mulImpl` directly with the periodic leaf and compares
+full `mulStrassen` both as shipped and at matched cutoffs, at `p = 5`, `65537`,
+and `2^31 - 1`. Across the square and rectangular cases the leaf is
+`2.93`–`16.84×` faster and full Strassen is `13.32`–`15.30×` faster; the
+matched-cutoff controls are `5.68`–`15.80×`. Leaf contractions of length
+`12289` and `20481` cross three and five windows. A sweep against 256-term and
+effectively single-flush alternatives measures the selected window's periodic
+cost at `3.9`–`5.4%` against the single-flush loop. The result clears the 5%
+demonstration gate without changing `strassenDefault`.
 
 ### Conformance
 
@@ -389,6 +475,12 @@ not kernel `decide`: `mulStrassen` is defined by well-founded recursion and does
 not reduce cheaply in the kernel, so it stays off the `decide` cross-check path
 that design principle 11 discusses. Oracle: none; the surface is structural-layer
 exact arithmetic, as for the existing multiplication guards.
+
+`conformance/HexBerlekamp/Conformance.lean` adds the coefficient-specific
+cross-checks for `strassenBarrett`: near-upper-bound residues exercise high-word
+carries; inner dimensions `4095`, `4096`, and `4097` straddle the implementation
+dispatch and exact flush; `12289` covers three flushes plus a partial tail; and
+empty contraction/output axes cover the generic rectangular signature.
 
 ### New public names
 

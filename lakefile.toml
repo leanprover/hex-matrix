@@ -1,10 +1,15 @@
 name = "hex-matrix"
 defaultTargets = ["HexMatrix"]
 
+leanOptions = [
+  { name = "doc.verso", value = true },
+  { name = "doc.verso.suggestions", value = false },
+]
+
 [[require]]
 name = "HexBasic"
 git = "https://github.com/leanprover/hex-basic.git"
-rev = "f1580d28c2e9ff9e8d4d7cdef9dccbaa17780b03"
+rev = "a3ab4fd9a79efbe6b07337836b3b5828d22d65a6"
 
 [[lean_lib]]
 name = "HexMatrix"
