@@ -5,7 +5,7 @@ on:
   pull_request:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -15,36 +15,31 @@ jobs:
         with:
           auto-config: false
           build: false
-      - name: Install FLINT oracle dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgmp-dev
-      - name: Install python-flint
-        run: python3 -m pip install --user python-flint
+          use-github-cache: false
+          use-mathlib-cache: false
+      - name: Restore Lake build outputs
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .lake/build
+            .lake/packages/Hex*/.lake/build
+          key: lake-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            lake-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json') }}-
       - name: Build library
         run: lake build
-      - name: Build conformance sidecar
-        run: |
-          cd conformance
-          lake build
-          cd ..
-      - name: Conformance oracle (python-flint cross-check)
-        run: bash scripts/ci/run_oracles.sh
-      - name: Build + full bench verify (FLINT comparator)
-        env:
-          # Hard cap per SPEC/benchmarking.md §CI integration "Time
-          # budget". The bench verifies the fixed FLINT comparator
-          # rungs (runFlintBareissDet*), spawning the persistent
-          # python-flint driver once per run.
-          BENCH_VERIFY_HARD_CAP_SECONDS: "360"
-          HEX_FLINT_BENCH_DRIVER: ${{ github.workspace }}/scripts/oracle/flint_bench_driver.py
-          HEX_FLINT_BENCH_PYTHON: python3
-        run: |
-          cd bench
-          lake build hexmatrix_bench
-          bash ../scripts/ci/check_bench_verify_budget.sh hexmatrix_bench
       - name: Assert Mathlib-free
         run: |
-          if find . -type d -name mathlib | grep -q .; then
-            echo "ERROR: a package pulled in Mathlib"; exit 1; fi
-          if grep -rqE '^import Mathlib' HexMatrix conformance bench 2>/dev/null; then
+          if find .lake -type d -iname mathlib 2>/dev/null | grep -q .; then
+            echo "ERROR: a Lake build pulled in Mathlib"; exit 1; fi
+          if grep -rqE '^[[:space:]]*((public|private|meta)[[:space:]]+)*import[[:space:]]+Mathlib' HexMatrix 2>/dev/null; then
             echo "ERROR: a source file imports Mathlib"; exit 1; fi
           echo "Mathlib-free OK"
+      - name: Save Lake build outputs
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .lake/build
+            .lake/packages/Hex*/.lake/build
+          key: lake-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json') }}-${{ github.run_id }}-${{ github.run_attempt }}

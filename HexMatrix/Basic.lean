@@ -43,6 +43,24 @@ structure Matrix (R : Type u) (n m : Nat) where
   data : Vector R (n * m)
 deriving DecidableEq, BEq
 
+/-- Structural matrix comparison is lawful whenever entry comparison is. -/
+instance {R : Type u} {n m : Nat} [BEq R] [LawfulBEq R] :
+    LawfulBEq (Matrix R n m) where
+  eq_of_beq := by
+    intro A B h
+    cases A with
+    | mk a =>
+      cases B with
+      | mk b =>
+        congr
+        exact eq_of_beq h
+  rfl := by
+    intro A
+    cases A with
+    | mk a =>
+      change (a == a) = true
+      exact beq_self_eq_true a
+
 end Hex
 
 namespace Vector
@@ -136,11 +154,11 @@ Both entry accessors and `getRow` read the flat buffer directly at `i * m + j`,
 so a single-entry read is `O(1)` and never materializes a row. -/
 
 /-- Entry access by a `Fin n × Fin m` index: the `O(1)` flat read. -/
-instance : GetElem (Matrix R n m) (Fin n × Fin m) R (fun _ _ => True) where
+@[expose] instance : GetElem (Matrix R n m) (Fin n × Fin m) R (fun _ _ => True) where
   getElem M p _ := M.data[p.1.val * m + p.2.val]'(flatIdx_lt p.1.isLt p.2.isLt)
 
 /-- Entry access by a `Nat × Nat` index. -/
-instance : GetElem (Matrix R n m) (Nat × Nat) R (fun _ p => p.1 < n ∧ p.2 < m) where
+@[expose] instance : GetElem (Matrix R n m) (Nat × Nat) R (fun _ p => p.1 < n ∧ p.2 < m) where
   getElem M p h := M.data[p.1 * m + p.2]'(flatIdx_lt h.1 h.2)
 
 /-- The `i`-th row of a matrix, materialized from the flat buffer. This copies the
@@ -179,6 +197,11 @@ def ofFn (f : Fin n → Fin m → R) : Matrix R n m :=
   ⟨Hex.Vector.ofFn' fun p : Fin (n * m) =>
     f ⟨p.val / m, row_of_lt p⟩ ⟨p.val % m, col_of_lt p⟩⟩
 
+/-- Transport the row dimension of a matrix along an equality. The backing
+buffer is unchanged. -/
+@[expose] def castRows {n' : Nat} (h : n = n') (A : Matrix R n m) : Matrix R n' m :=
+  h ▸ A
+
 /-! # Core reduction lemmas -/
 
 /-- Row access `M[i]` normalizes to the computable `getRow M i`. -/
@@ -203,6 +226,25 @@ form. The nested form is the simp-normal form the entry lemmas are stated in. -/
 @[simp, grind =] theorem getElem_pair_eq_nested (M : Matrix R n m) (i : Fin n) (j : Fin m) :
     M[(i, j)] = M[i][j] := by
   rw [getElem_eq_getRow, getElem_getRow]; rfl
+
+/-- The constant-time pair entry agrees with the explicit row-vector projection. -/
+theorem getElem_pair_eq_get (M : Matrix R n m) (i : Fin n) (j : Fin m) :
+    M[(i, j)] = (getRow M i).get j := by
+  rw [getElem_pair_eq_nested, getElem_eq_getRow]
+  rfl
+
+/-- Pair entry access through a row-dimension transport. -/
+theorem getElem_castRows {n' : Nat} (h : n = n') (A : Matrix R n m)
+    (i : Fin n') (j : Fin m) :
+    (castRows h A)[(i, j)] = A[(Fin.cast h.symm i, j)] := by
+  subst n'
+  rfl
+
+/-- Nested entry access through a row-dimension transport. -/
+@[simp] theorem getElem_castRows_nested {n' : Nat} (h : n = n') (A : Matrix R n m)
+    (i : Fin n') (j : Fin m) :
+    (castRows h A)[i][j] = A[Fin.cast h.symm i][j] := by
+  rw [← getElem_pair_eq_nested, getElem_castRows, getElem_pair_eq_nested]
 
 /-- `Nat`-pair entry access, normalized to the row lookup (concrete-index form).
 The statement observes rows, not the backing buffer, so it is representation-
