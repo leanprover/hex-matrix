@@ -485,7 +485,7 @@ check is a cross-check that the compiled `mulStrassen` agrees with the reference
 `mul` on concrete inputs. It runs through `#guard`, the compiled-evaluator path,
 not kernel `decide`: `mulStrassen` is defined by well-founded recursion and does
 not reduce cheaply in the kernel, so it stays off the `decide` cross-check path
-that design principle 11 discusses. Oracle: none; the surface is structural-layer
+that design principle 11 discusses. Oracle: none; the surface is
 exact arithmetic, as for the existing multiplication guards.
 
 `Matrix.castRows` transports the row dimension along an equality without
@@ -519,19 +519,45 @@ The row-transport additions are `Matrix.castRows`,
 ## External comparators
 
 The dense base surfaces (matrix multiplication, row operations, transposition,
-slicing) have **no** external comparator named. They declare absence with the
-**structural-layer** reason per
-[the benchmarking spec's "Comparator naming" section](https://github.com/kim-em/hex-dev/blob/main/SPEC/benchmarking.md#comparator-naming):
-those surfaces are GMP-backed `Int` arithmetic on `Vector` / `Array`
+slicing) have **no** external comparator named: those surfaces are GMP-backed `Int` arithmetic on `Vector` / `Array`
 primitives. The determinant comparator (FLINT `fmpz_mat_det`) covers the
 determinant surface and lives in `hex-bareiss`.
 
-The Strassen bench driver declares the same **structural-layer** absence: it
-measures the multiplication surface already covered above, and its baseline is
-the internal naive `mul`, not an external tool. Its deliverable is the measured
-crossover cutoff and the speedup at the largest benched dimension, recorded in
-the headline report.
+The Strassen bench driver likewise has no external comparator: it measures
+the multiplication surface already covered above, and its baseline is the
+internal naive `mul`, not an external tool. Its purpose is the measured
+crossover cutoff and the speedup at the largest benched dimension.
 
-Structured metadata in the project's
-[`libraries.yml`](https://github.com/kim-em/hex-dev/blob/main/libraries.yml)
-under `HexMatrix.phase4`.
+## Entrywise maps
+
+`Matrix.mapEntries` applies any coefficient function in one pass over the
+flat buffer; `getElem_mapEntries` states its entry equation. Determinant
+transport under ring homomorphisms belongs to hex-determinant.
+
+## Kronecker-packed dot products
+
+`HexMatrix/Packed.lean` (`Hex.Matrix.Packed`) is the shared, Mathlib-free
+kernel of the packed evaluation used by the certificate checkers of
+[hex-rank §Packed evaluation](../../HexRank/SPEC/hex-rank.md#packed-evaluation):
+`dotNat` (the plain dot product of natural-number lists, stopping at the
+shorter), `packRow` (a list as `Σ aₖ · 2^(W·k)`), `packCol` (a list cut or
+zero-padded to `r` entries and packed in reverse order by a Horner loop of
+`r` steps, `packRevAux`), `packRows`/`packCols`, `slot` (bits
+`W·(r − 1), …, W·r − 1`) and `dotPacked` (slot `r − 1` of the product of a
+packed row and a reverse-packed column, which is their dot product when
+no convolution coefficient reaches `2^W`); for signed rows, `posParts` and
+`negParts` (the nonnegative parts and the negated nonpositive parts),
+`packSignedCut`/`packSignedCol` (a signed row or column packed as the pair
+of its parts) and `dotIntPacked` (the four packed products combined), with
+the bound on absolute values (`allAbsLt`, `allAbsLtRows`); and the plain
+`dotInt` and the one-pass transpose `columns` (with `column` as its
+specification), shared by the rank and determinant checkers. Structural
+recursion and the
+`Nat` primitives `Nat.add`, `Nat.mul`, `Nat.shiftLeft`, `Nat.shiftRight`,
+`Nat.land` and `Nat.pow` only, all GMP-accelerated in the kernel; the two
+per-term loops `dotNat` and `dotInt` apply `List.rec` directly, with the
+equation forms `dotNatImpl` and `dotIntImpl` attached by `@[csimp]`
+theorems for the compiler, per
+[matrix-tactics §Kernel discipline](../../SPEC/matrix-tactics.md#kernel-discipline). The
+soundness lemma `dotPacked_eq` is in
+[hex-matrix-mathlib](../../HexMatrixMathlib/SPEC/hex-matrix-mathlib.md#kronecker-packed-dot-products).
